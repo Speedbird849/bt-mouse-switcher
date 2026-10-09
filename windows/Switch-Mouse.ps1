@@ -198,8 +198,8 @@ function Unpair-WinRTDevice {
         $props.Add('System.ItemNameDisplay')
         $props.Add('System.Devices.Aep.IsPaired')
 
-        # Query AssociationEndpoint (the actual Bluetooth device pairing entity in Windows)
-        $aqs = 'System.Devices.Aep.ProtocolId:="{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}" AND System.Devices.Aep.IsPaired:=System.StructuredQueryType.Boolean#True'
+        # Query cached paired AssociationEndpoints instantly (<100ms) with IssueInquiry:=False instead of active inquiry scan
+        $aqs = [Windows.Devices.Bluetooth.BluetoothDevice]::GetDeviceSelectorFromPairingState($true)
         $devices = Await-WinRTOperation ([Windows.Devices.Enumeration.DeviceInformation]::FindAllAsync($aqs, $props, [Windows.Devices.Enumeration.DeviceInformationKind]::AssociationEndpoint)) ([Windows.Devices.Enumeration.DeviceInformationCollection])
 
         $found = $false
