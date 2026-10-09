@@ -2,6 +2,8 @@
 
 A one-click solution to seamlessly switch a single-host Bluetooth mouse between macOS and Windows without ever manually digging into Bluetooth Settings.
 
+Written in Python + Swift (macOS) and PowerShell (Windows).
+
 ---
 
 ## The Problem

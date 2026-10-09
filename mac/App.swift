@@ -251,32 +251,56 @@ class MainWindowController: NSWindowController {
             updateUI(status: "Step 2/4: Resetting Bluetooth state...", detail: "Waiting a second for Bluetooth subsystem...", color: .systemOrange)
             Thread.sleep(forTimeInterval: 1.0)
 
-            // Step 3: Search for device in pairing mode
-            updateUI(status: "Step 3/4: Searching for mouse...", detail: "Looking for \(self.exactTargetName)...", color: .systemBlue)
+            // Step 3: Connect to mouse
+            updateUI(status: "Step 3/4: Connecting to mouse...", detail: "Connecting to \(self.exactTargetName)...", color: .systemBlue)
 
-            var discoveredMac: String? = nil
-            let searchStart = Date()
-            let timeout: TimeInterval = 18.0
+            var targetMacToConnect: String? = nil
 
-            while Date().timeIntervalSince(searchStart) < timeout {
-                let (inqCode, inqOut, _) = self.runCmd(["--inquiry", "5", "--format", "json"], timeout: 10)
-                if inqCode == 0, let data = inqOut.data(using: .utf8),
-                   let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                    for dev in list {
-                        let name = dev["name"] as? String ?? ""
-                        let addr = dev["address"] as? String ?? ""
-                        if self.isTargetMouse(name: name, address: addr) {
-                            discoveredMac = addr
-                            break
-                        }
+            // 3a. If we have a cached MAC, attempt direct connection first (fast path)
+            if let cached = cachedMac, !cached.isEmpty {
+                updateUI(status: "Step 3/4: Attempting direct connect...", detail: "Trying known device address...", color: .systemBlue)
+                if let dev = IOBluetoothDevice(addressString: cached) {
+                    let ret = dev.openConnection()
+                    if ret == 0 || dev.isConnected() {
+                        targetMacToConnect = cached
                     }
                 }
-                if discoveredMac != nil { break }
-                let elapsed = Int(Date().timeIntervalSince(searchStart))
-                updateUI(status: "Step 3/4: Searching (\(elapsed)s)...", detail: "Make sure the blue light under the mouse is blinking rapidly.", color: .systemBlue)
+                if targetMacToConnect == nil {
+                    // Try blueutil quick connect
+                    _ = self.runCmd(["--connect", cached], timeout: 4)
+                    let (_, connCheck, _) = self.runCmd(["--is-connected", cached], timeout: 2)
+                    if connCheck == "1" {
+                        targetMacToConnect = cached
+                    }
+                }
             }
 
-            guard let foundMac = discoveredMac else {
+            // 3b. If direct connect didn't find it, search for the device in pairing mode
+            if targetMacToConnect == nil {
+                updateUI(status: "Step 3/4: Searching for mouse...", detail: "Make sure the pairing light under the mouse is blinking rapidly.", color: .systemBlue)
+                let searchStart = Date()
+                let timeout: TimeInterval = 20.0
+
+                while Date().timeIntervalSince(searchStart) < timeout {
+                    let (inqCode, inqOut, _) = self.runCmd(["--inquiry", "4", "--format", "json"], timeout: 8)
+                    if inqCode == 0, let data = inqOut.data(using: .utf8),
+                       let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                        for dev in list {
+                            let name = dev["name"] as? String ?? ""
+                            let addr = dev["address"] as? String ?? ""
+                            if self.isTargetMouse(name: name, address: addr) {
+                                targetMacToConnect = addr
+                                break
+                            }
+                        }
+                    }
+                    if targetMacToConnect != nil { break }
+                    let elapsed = Int(Date().timeIntervalSince(searchStart))
+                    updateUI(status: "Step 3/4: Searching (\(elapsed)s)...", detail: "Make sure the blue light under the mouse is blinking rapidly.", color: .systemBlue)
+                }
+            }
+
+            guard let foundMac = targetMacToConnect else {
                 updateUI(status: "Error: Mouse Not Found", detail: "Could not find \(self.exactTargetName). Press the pairing button and retry.", color: .systemRed)
                 DispatchQueue.main.async {
                     self.isSwitching = false
