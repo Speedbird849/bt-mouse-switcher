@@ -1,11 +1,11 @@
-# Bluetooth Mouse M336/M337/M535 Quick Switcher
+# Logitech M336/M337/M535 Quick Switcher
 
-A 1-click solution to seamlessly switch a single-host Bluetooth mouse (marketed as Logitech M336, M337, and M535; appearing in the Bluetooth device list exactly as **Bluetooth Mouse M336/M337/M535**) between macOS and Windows without ever manually digging into Bluetooth Settings.
+A 1-click solution to seamlessly switch a single-host Bluetooth mouse, between macOS and Windows without ever manually digging into Bluetooth Settings.
 
 ---
 
 ## The Problem
-The mouse is a single-host Bluetooth device (it does not have multi-device host switching buttons like the MX Master). When paired to Computer B, its internal Link Key is overwritten. When switching back to Computer A, the host's existing pairing key is rejected by the mouse, requiring the user to manually:
+The M336/M337/M535 mouse is a single-host Bluetooth device (it does not have multi-device host switching buttons like the MX Master). When paired to Computer B, its internal Link Key is overwritten. When switching back to Computer A, the host's existing pairing key is rejected by the mouse, requiring the user to manually:
 1. Open Bluetooth Settings.
 2. Find the mouse and click "Forget Device / Unpair".
 3. Put the mouse into pairing mode.
