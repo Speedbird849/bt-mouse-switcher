@@ -8,11 +8,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var isSwitching = false
     var timer: Timer?
 
+    let exactDeviceName = "Bluetooth Mouse M336/M337/M535"
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.title = "Mouse"
-            button.toolTip = "Logitech M336/M337/M535 Quick Switcher"
+            button.toolTip = exactDeviceName + " Quick Switcher"
         }
         
         setupMenu()
@@ -36,7 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         actionMenuItem = NSMenuItem(title: "Switch to Mac (Pair & Connect)", action: #selector(performSwitch), keyEquivalent: "s")
         menu.addItem(actionMenuItem)
         
-        let unpairItem = NSMenuItem(title: "Forget / Unpair Mouse", action: #selector(performUnpair), keyEquivalent: "u")
+        let unpairItem = NSMenuItem(title: "Forget / Unpair " + exactDeviceName, action: #selector(performUnpair), keyEquivalent: "u")
         menu.addItem(unpairItem)
         
         menu.addItem(NSMenuItem.separator())
@@ -59,7 +61,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func isTargetMouse(name: String) -> Bool {
         let lower = name.lowercased()
-        return lower.contains("m337") || lower.contains("m336") || lower.contains("m535") || lower.contains("bluetooth mouse")
+        let exactLower = exactDeviceName.lowercased()
+        return lower == exactLower || lower.contains(exactLower) || lower.contains("m336/m337/m535") || lower.contains("m337") || lower.contains("m336") || lower.contains("m535")
     }
 
     func checkStatus() {

@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Logitech M336/M337/M535 Quick Switcher for Windows (PowerShell)
+    Bluetooth Mouse M336/M337/M535 Quick Switcher for Windows (PowerShell)
 .DESCRIPTION
     Automates:
-    1. Checking if the Logitech mouse is already connected on Windows.
-    2. Unpairing any stale Logitech mouse pairing profile.
+    1. Checking if the Bluetooth Mouse M336/M337/M535 is already connected on Windows.
+    2. Unpairing any stale pairing profile.
     3. Scanning for the mouse in pairing mode.
     4. Automatically pairing (handling PIN 0000 and Just Works) and establishing connection.
 #>
@@ -16,7 +16,7 @@ param (
 )
 
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host " Logitech M336/M337/M535 Mouse Switcher for Windows" -ForegroundColor Cyan
+Write-Host " Bluetooth Mouse M336/M337/M535 Switcher (Windows)" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 
 # Check if Bluetooth Command Line Tools (btpair) is available as an option
@@ -41,7 +41,7 @@ function Show-Notification {
         $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
         $xml.LoadXml($template)
         $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Logitech Mouse Switcher")
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Bluetooth Mouse Switcher")
         $notifier.Show($toast)
     } catch {
         Write-Host "[$Title] $Message" -ForegroundColor Yellow
@@ -57,10 +57,17 @@ using Windows.Devices.Enumeration;
 using Windows.Devices.Bluetooth;
 
 public class BtSwitcher {
+    private const string ExactTarget = "Bluetooth Mouse M336/M337/M535";
+
     private static bool IsTargetDevice(string name) {
         if (string.IsNullOrWhiteSpace(name)) return false;
+        if (name.Equals(ExactTarget, StringComparison.OrdinalIgnoreCase)) return true;
         string n = name.ToLowerInvariant();
-        return n.Contains("m337") || n.Contains("m336") || n.Contains("m535") || n.Contains("bluetooth mouse");
+        return n.Contains("m336/m337/m535")
+            || n.Contains("m337")
+            || n.Contains("m336")
+            || n.Contains("m535")
+            || n.Contains("bluetooth mouse");
     }
 
     public static async Task<bool> UnpairAsync(string targetName) {
@@ -83,7 +90,7 @@ public class BtSwitcher {
 
     public static async Task<bool> PairAsync(string targetName, int timeoutSeconds) {
         try {
-            Console.WriteLine("Scanning for Logitech M336/M337/M535 in pairing mode...");
+            Console.WriteLine("Scanning for Bluetooth Mouse M336/M337/M535 in pairing mode...");
             string selector = BluetoothDevice.GetDeviceSelectorFromPairingState(false);
             var watcher = DeviceInformation.CreateWatcher(selector);
 
@@ -129,7 +136,7 @@ public class BtSwitcher {
 "@
 
 function Invoke-WinRTSwitch {
-    Show-Notification "Switching Mouse to Windows" "Searching for mouse... Press pairing button on mouse."
+    Show-Notification "Switching Mouse to Windows" "Searching for Bluetooth Mouse M336/M337/M535... Press pairing button on mouse."
     
     # Unpair
     [BtSwitcher]::UnpairAsync($DeviceName).GetAwaiter().GetResult() | Out-Null
@@ -138,34 +145,33 @@ function Invoke-WinRTSwitch {
     # Pair
     $success = [BtSwitcher]::PairAsync($DeviceName, $TimeoutSeconds).GetAwaiter().GetResult()
     if ($success) {
-        Write-Host "Logitech mouse paired and connected successfully." -ForegroundColor Green
-        Show-Notification "Logitech Mouse Connected" "Mouse is connected and ready to use on Windows."
+        Write-Host "Bluetooth Mouse M336/M337/M535 paired and connected successfully." -ForegroundColor Green
+        Show-Notification "Bluetooth Mouse Connected" "Mouse is connected and ready to use on Windows."
     } else {
-        Write-Host "Failed to find or pair Logitech mouse." -ForegroundColor Red
-        Show-Notification "Mouse Switch Failed" "Mouse not found. Make sure the pairing button was pressed."
+        Write-Host "Failed to find or pair Bluetooth Mouse M336/M337/M535." -ForegroundColor Red
+        Show-Notification "Mouse Switch Failed" "Bluetooth Mouse M336/M337/M535 not found. Make sure the pairing button was pressed."
     }
 }
 
 # If btpair CLI tool is available, use it; otherwise use WinRT
 if ($btpair) {
     Write-Host "Using btpair CLI..." -ForegroundColor Gray
-    Show-Notification "Switching Mouse to Windows" "Searching for mouse... Press pairing button on mouse."
+    Show-Notification "Switching Mouse to Windows" "Searching for Bluetooth Mouse M336/M337/M535... Press pairing button on mouse."
     
     # 1. Unpair
     & btpair -u -n "Bluetooth Mouse M336/M337/M535" 2>$null | Out-Null
-    & btpair -u -n "Logitech M337" 2>$null | Out-Null
     & btpair -u -n $DeviceName 2>$null | Out-Null
     Start-Sleep -Milliseconds 800
 
     # 2. Pair with PIN 0000 or default
     $result = & btpair -p -n "Bluetooth Mouse M336/M337/M535" -b "0000"
     if ($LASTEXITCODE -ne 0) {
-        $result = & btpair -p -n $DeviceName
+        $result = & btpair -p -n "Bluetooth Mouse M336/M337/M535"
     }
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Connected successfully via btpair." -ForegroundColor Green
-        Show-Notification "Logitech Mouse Connected" "Mouse is connected and ready to use."
+        Show-Notification "Bluetooth Mouse Connected" "Mouse is connected and ready to use."
     } else {
         Write-Host "btpair failed, falling back to WinRT..." -ForegroundColor Yellow
         Add-Type -TypeDefinition $csharpSource

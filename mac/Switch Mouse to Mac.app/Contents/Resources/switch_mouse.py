@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Logitech M336/M337/M535 Bluetooth Mouse Quick Switcher for macOS
+Bluetooth Mouse M336/M337/M535 Quick Switcher for macOS
 Automates:
 1. Checking if the mouse is already connected.
 2. Unpairing any stale pairing profile from macOS Bluetooth settings.
@@ -21,17 +21,15 @@ from pathlib import Path
 CONFIG_DIR = Path.home() / ".config" / "bt-mouse-switcher"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
+EXACT_DEVICE_NAME = "Bluetooth Mouse M336/M337/M535"
+
 DEFAULT_DEVICE_NAME_PATTERNS = [
-    "Bluetooth Mouse M336/M337/M535",
-    "Logitech M336/M337/M535",
-    "Bluetooth Mouse",
-    "Logitech M337",
-    "Logitech M336",
-    "Logitech M535",
+    EXACT_DEVICE_NAME,
     "M336/M337/M535",
     "M337",
     "M336",
     "M535",
+    "Bluetooth Mouse",
 ]
 DEFAULT_TIMEOUT_SEC = 15
 
@@ -145,34 +143,42 @@ def is_mouse_device(address):
     return False
 
 def is_matching_device(device, target_address=None, target_names=None, check_peripheral_type=False):
-    """Check if device matches target MAC address, name, or device class."""
+    """Check if device matches target MAC address, exact name, or patterns."""
     if not isinstance(device, dict):
         return False
     dev_addr = (device.get("address") or "").strip().lower()
-    dev_name = (device.get("name") or "").strip().lower()
+    dev_name = (device.get("name") or "").strip()
 
     if target_address and dev_addr == target_address.strip().lower():
         return True
 
+    # 1. Exact match check (case-insensitive)
+    if dev_name.lower() == EXACT_DEVICE_NAME.lower():
+        return True
+
+    # 2. Pattern check
     if not target_names:
         target_names = DEFAULT_DEVICE_NAME_PATTERNS
 
+    dev_name_lower = dev_name.lower()
     for pattern in target_names:
         p = pattern.strip().lower()
-        if p and p in dev_name:
+        if p and p in dev_name_lower:
             return True
 
-    # If name is not yet resolved, query the device directly
-    if not dev_name or dev_name == dev_addr.replace("-", ":"):
+    # 3. If name is not yet resolved, query the device directly
+    if not dev_name or dev_name.lower() == dev_addr.replace("-", ":"):
         resolved = resolve_device_name(dev_addr)
         if resolved:
             resolved_lower = resolved.strip().lower()
+            if resolved_lower == EXACT_DEVICE_NAME.lower():
+                return True
             for pattern in target_names:
                 p = pattern.strip().lower()
                 if p and p in resolved_lower:
                     return True
 
-    # If enabled, check if device class is a mouse
+    # 4. If enabled, check if device class is a mouse
     if check_peripheral_type and is_mouse_device(dev_addr):
         return True
 
@@ -196,7 +202,7 @@ def get_paired_devices():
             pass
     return []
 
-def unpair_device(address, name="Device"):
+def unpair_device(address, name=EXACT_DEVICE_NAME):
     """Unpair device and remove link keys from macOS Bluetooth."""
     print(f"Unpairing stale {name} ({address})...")
     # Method 1: PyObjC direct IOBluetooth removal
@@ -233,8 +239,7 @@ def pair_device(address):
     """Pair with device using blueutil (handles PIN 0000 and SSP user confirmation)."""
     print(f"Pairing with {address}...")
 
-    # 1. Try pairing with PIN '0000' (standard for Logitech M336/M337/M535)
-    # Also supply 'yes\n' in case simple pairing confirmation is required
+    # 1. Try pairing with PIN '0000' (standard for Bluetooth Mouse M336/M337/M535)
     code, out, err = run_cmd([BLUEUTIL, "--pair", address, "0000"], timeout=15, input_data="yes\n")
     if code == 0:
         print("Pairing successful.")
@@ -319,13 +324,13 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
 
     if existing_match:
         addr = existing_match.get("address")
-        name = existing_match.get("name") or "Logitech M336/M337/M535"
+        name = existing_match.get("name") or EXACT_DEVICE_NAME
         if existing_match.get("connected") is True:
             _, is_conn, _ = run_cmd([BLUEUTIL, "--is-connected", addr])
             if is_conn == "1":
                 print(f"{name} ({addr}) is already connected and active.")
                 if not silent:
-                    notify("Logitech M336/M337/M535", "Mouse is already connected and active.", sound="Glass")
+                    notify(EXACT_DEVICE_NAME, "Mouse is already connected and active.", sound="Glass")
                 return 0
 
         # Found stale pairing profile, unpair it
@@ -335,7 +340,7 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
     # 2. Search for mouse in pairing mode
     print(f"Searching for mouse (timeout: {timeout}s)...")
     if not silent:
-        notify("Switching Mouse to Mac", "Searching for Logitech M336/M337/M535...\nPress pairing button on mouse.", sound="Ping")
+        notify("Switching Mouse to Mac", f"Searching for {EXACT_DEVICE_NAME}...\nPress pairing button on mouse.", sound="Ping")
 
     start_time = time.time()
     discovered_target = None
@@ -352,14 +357,14 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
         print(f"Still searching... (elapsed: {int(time.time() - start_time)}s)")
 
     if not discovered_target:
-        msg = f"Could not find Logitech M336/M337/M535 within {timeout}s. Press the button underneath the mouse and try again."
+        msg = f"Could not find {EXACT_DEVICE_NAME} within {timeout}s. Press the button underneath the mouse and try again."
         print(msg, file=sys.stderr)
         if not silent:
-            notify("Mouse Switch Failed", "Logitech M336/M337/M535 not found.\nPress pairing button underneath mouse and retry.", sound="Basso")
+            notify("Mouse Switch Failed", f"{EXACT_DEVICE_NAME} not found.\nPress pairing button underneath mouse and retry.", sound="Basso")
         return 1
 
     target_addr = discovered_target.get("address")
-    target_name = discovered_target.get("name") or resolve_device_name(target_addr) or "Logitech M336/M337/M535"
+    target_name = discovered_target.get("name") or resolve_device_name(target_addr) or EXACT_DEVICE_NAME
     print(f"Found {target_name} at {target_addr}!")
 
     # Update config with discovered address
@@ -377,7 +382,7 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
         success_msg = f"{target_name} connected successfully!"
         print(success_msg)
         if not silent:
-            notify("Logitech M336/M337/M535 Connected", "Mouse is now connected and ready to use.", sound="Glass")
+            notify(f"{EXACT_DEVICE_NAME} Connected", "Mouse is now connected and ready to use.", sound="Glass")
         return 0
     else:
         err_msg = f"Paired with {target_name}, but connection timed out. Click mouse buttons to wake it up."
@@ -387,7 +392,7 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
         return 0
 
 def main():
-    parser = argparse.ArgumentParser(description="Logitech M336/M337/M535 Bluetooth Mouse Quick Switcher for macOS")
+    parser = argparse.ArgumentParser(description="Bluetooth Mouse M336/M337/M535 Quick Switcher for macOS")
     parser.add_argument("--name", nargs="*", default=None, help="Device name pattern(s) to match")
     parser.add_argument("--mac", default=None, help="Explicit Bluetooth MAC address (e.g. xx-xx-xx-xx-xx-xx)")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SEC, help="Search timeout in seconds (default: 15)")

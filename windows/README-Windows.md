@@ -1,6 +1,8 @@
-# Logitech M336/M337/M535 Quick Switcher for Windows
+# Bluetooth Mouse M336/M337/M535 Quick Switcher for Windows
 
 This script automates unpairing the old profile and pairing/connecting to the mouse when switching back to your Windows laptop.
+
+The mouse appears in your Bluetooth device list as **Bluetooth Mouse M336/M337/M535**.
 
 ## How to Use (One-Click)
 
@@ -9,7 +11,7 @@ This script automates unpairing the old profile and pairing/connecting to the mo
 3. Rename the shortcut to "Switch Mouse to Windows".
 
 ### Switching Workflow
-1. Press the Bluetooth button on the bottom of your Logitech mouse (the blue LED starts blinking rapidly).
+1. Press the Bluetooth button on the bottom of your mouse (the blue LED starts blinking rapidly).
 2. Double-click "Switch Mouse to Windows" on your Desktop.
 3. The script will:
    - Unpair any existing stale mouse connection.

@@ -1,11 +1,11 @@
-# Logitech M336/M337/M535 Bluetooth Quick Switcher
+# Bluetooth Mouse M336/M337/M535 Quick Switcher
 
-A 1-click solution to seamlessly switch a single-host Bluetooth mouse (Logitech M336 / M337 / M535) between macOS and Windows without ever manually digging into Bluetooth Settings.
+A 1-click solution to seamlessly switch a single-host Bluetooth mouse (marketed as Logitech M336, M337, and M535; appearing in the Bluetooth device list exactly as **Bluetooth Mouse M336/M337/M535**) between macOS and Windows without ever manually digging into Bluetooth Settings.
 
 ---
 
 ## The Problem
-The Logitech M336/M337/M535 is a single-host Bluetooth mouse (it does not have multi-device host switching buttons like the MX Master). When paired to Computer B, its internal Link Key is overwritten. When switching back to Computer A, the host's existing pairing key is rejected by the mouse, requiring the user to manually:
+The mouse is a single-host Bluetooth device (it does not have multi-device host switching buttons like the MX Master). When paired to Computer B, its internal Link Key is overwritten. When switching back to Computer A, the host's existing pairing key is rejected by the mouse, requiring the user to manually:
 1. Open Bluetooth Settings.
 2. Find the mouse and click "Forget Device / Unpair".
 3. Put the mouse into pairing mode.
@@ -15,7 +15,7 @@ The Logitech M336/M337/M535 is a single-host Bluetooth mouse (it does not have m
 This tool automates the entire cycle into a single click:
 1. Checks if the mouse is already active.
 2. Automatically forgets / unpairs the stale device profile and link keys.
-3. Discovers the mouse in pairing mode (matching "Bluetooth Mouse M336/M337/M535").
+3. Discovers the mouse in pairing mode (matching the exact name "Bluetooth Mouse M336/M337/M535").
 4. Pairs and connects to it automatically (handling PIN 0000 and Simple Pairing).
 5. Displays native system notifications and audio feedback.
 
@@ -41,7 +41,7 @@ The applications are located in your `/Applications` folder:
    - Run `bt-mouse-switch` from any terminal window.
 
 ### Switching Routine on Mac
-1. Press the Bluetooth button on the bottom of your Logitech mouse (blue LED blinks fast).
+1. Press the Bluetooth button on the bottom of the mouse (blue LED blinks fast).
 2. Click **Switch Mouse to Mac** (or click it in the Menu Bar / Spotlight / Dock).
 3. The mouse will unpair the old profile, discover the mouse, pair, and connect.
 
