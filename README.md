@@ -1,6 +1,6 @@
 # Logitech M336/M337/M535 Quick Switcher
 
-A 1-click solution to seamlessly switch a single-host Bluetooth mouse between macOS and Windows without ever manually digging into Bluetooth Settings.
+A one-click solution to seamlessly switch a single-host Bluetooth mouse between macOS and Windows without ever manually digging into Bluetooth Settings.
 
 ---
 
