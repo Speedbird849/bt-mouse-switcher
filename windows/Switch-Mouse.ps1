@@ -319,9 +319,10 @@ if ($btpair) {
     Write-Host "Using btpair CLI..." -ForegroundColor Gray
     Show-Notification "Switching Mouse to Windows" "Searching for Bluetooth Mouse M336/M337/M535... Press pairing button on mouse."
     
-    # 1. Unpair
-    & btpair -u -n "Bluetooth Mouse M336/M337/M535" 2>$null | Out-Null
-    & btpair -u -n $DeviceName 2>$null | Out-Null
+    # 1. Unpair known and configured names
+    foreach ($name in @("Bluetooth Mouse M336/M337/M535", $DeviceName)) {
+        & btpair -u -n $name 2>$null | Out-Null
+    }
     Start-Sleep -Milliseconds 800
 
     # 2. Pair with PIN 0000 or default
@@ -335,13 +336,11 @@ if ($btpair) {
         Show-Notification "Bluetooth Mouse Connected" "Mouse is connected and ready to use."
     } else {
         Write-Host "btpair failed, falling back to WinRT..." -ForegroundColor Yellow
-        Initialize-WinRT
-        Invoke-WinRTSwitch
+        Initialize-WinRT; Invoke-WinRTSwitch
     }
 } else {
     try {
-        Initialize-WinRT
-        Invoke-WinRTSwitch
+        Initialize-WinRT; Invoke-WinRTSwitch
     } catch {
         Write-Error "Failed to initialize WinRT Bluetooth: $_"
         Write-Host "Tip: You can also install Bluetooth Command Line Tools (btpair) from https://bluetoothinstaller.com" -ForegroundColor Yellow
