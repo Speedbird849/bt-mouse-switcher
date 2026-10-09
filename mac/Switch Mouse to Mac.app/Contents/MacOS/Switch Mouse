@@ -1,0 +1,5 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCES="$DIR/../Resources"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+exec /usr/bin/python3 "$RESOURCES/switch_mouse.py" "$@"
