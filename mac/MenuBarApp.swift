@@ -11,8 +11,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.title = "🖱️ M337"
-            button.toolTip = "Logitech M337 Quick Switcher"
+            button.title = "Mouse"
+            button.toolTip = "Logitech M336/M337/M535 Quick Switcher"
         }
         
         setupMenu()
@@ -33,10 +33,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        actionMenuItem = NSMenuItem(title: "⚡️ Switch to Mac (Pair & Connect)", action: #selector(performSwitch), keyEquivalent: "s")
+        actionMenuItem = NSMenuItem(title: "Switch to Mac (Pair & Connect)", action: #selector(performSwitch), keyEquivalent: "s")
         menu.addItem(actionMenuItem)
         
-        let unpairItem = NSMenuItem(title: "Forget / Unpair M337", action: #selector(performUnpair), keyEquivalent: "u")
+        let unpairItem = NSMenuItem(title: "Forget / Unpair Mouse", action: #selector(performUnpair), keyEquivalent: "u")
         menu.addItem(unpairItem)
         
         menu.addItem(NSMenuItem.separator())
@@ -57,6 +57,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
+    func isTargetMouse(name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.contains("m337") || lower.contains("m336") || lower.contains("m535") || lower.contains("bluetooth mouse")
+    }
+
     func checkStatus() {
         guard !isSwitching else { return }
         guard let blueutil = findBlueutil() else {
@@ -65,6 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self else { return }
             let task = Process()
             task.executableURL = URL(fileURLWithPath: blueutil)
             task.arguments = ["--paired", "--format", "json"]
@@ -77,19 +83,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 task.waitUntilExit()
                 
                 var statusText = "Status: Disconnected / Not Paired"
-                var icon = "🖱️ M337"
+                var icon = "Mouse"
                 
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
                     for dev in json {
-                        let name = (dev["name"] as? String ?? "").lowercased()
-                        if name.contains("m337") {
+                        let name = dev["name"] as? String ?? ""
+                        if self.isTargetMouse(name: name) {
                             let connected = dev["connected"] as? Bool ?? false
                             if connected {
-                                statusText = "Status: Connected 🟢"
-                                icon = "🖱️ [ON]"
+                                statusText = "Status: Connected"
+                                icon = "Mouse [ON]"
                             } else {
-                                statusText = "Status: Paired (Disconnected) ⚪️"
-                                icon = "🖱️ [OFF]"
+                                statusText = "Status: Paired (Disconnected)"
+                                icon = "Mouse [OFF]"
                             }
                             break
                         }
@@ -97,40 +103,61 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 
                 DispatchQueue.main.async {
-                    self?.statusMenuItem.title = statusText
-                    self?.statusItem.button?.title = icon
+                    self.statusMenuItem.title = statusText
+                    self.statusItem.button?.title = icon
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self?.statusMenuItem.title = "Status: Bluetooth Error"
+                    self.statusMenuItem.title = "Status: Bluetooth Error"
                 }
             }
         }
     }
     
+    func findScriptPath() -> String? {
+        let bundleResources = Bundle.main.resourcePath ?? ""
+        let bundledScript = (bundleResources as NSString).appendingPathComponent("switch_mouse.py")
+        if FileManager.default.fileExists(atPath: bundledScript) {
+            return bundledScript
+        }
+        
+        let appPaths = [
+            "/Applications/Switch Mouse to Mac.app/Contents/Resources/switch_mouse.py",
+            "/Applications/Switch Mouse Menu Bar.app/Contents/Resources/switch_mouse.py",
+            (NSHomeDirectory() as NSString).appendingPathComponent(".local/bin/bt-mouse-switch")
+        ]
+        for p in appPaths {
+            if FileManager.default.fileExists(atPath: p) {
+                return p
+            }
+        }
+        
+        let currentDir = FileManager.default.currentDirectoryPath
+        let devPaths = [
+            (currentDir as NSString).appendingPathComponent("mac/switch_mouse.py"),
+            (currentDir as NSString).appendingPathComponent("switch_mouse.py")
+        ]
+        for p in devPaths {
+            if FileManager.default.fileExists(atPath: p) {
+                return p
+            }
+        }
+        
+        return nil
+    }
+
     @objc func performSwitch() {
         guard !isSwitching else { return }
         isSwitching = true
-        statusMenuItem.title = "Status: Switching... ⏳"
-        statusItem.button?.title = "🖱️ ⏳"
+        statusMenuItem.title = "Status: Switching..."
+        statusItem.button?.title = "Mouse [...]"
         actionMenuItem.isEnabled = false
         
-        // Find python script
-        let scriptPath: String
-        let bundleResources = Bundle.main.resourcePath ?? ""
-        let bundledScript = (bundleResources as NSString).appendingPathComponent("switch_mouse.py")
-        
-        if FileManager.default.fileExists(atPath: bundledScript) {
-            scriptPath = bundledScript
-        } else {
-            // Development path fallback
-            let currentDir = FileManager.default.currentDirectoryPath
-            let devScript = (currentDir as NSString).appendingPathComponent("switch_mouse.py")
-            if FileManager.default.fileExists(atPath: devScript) {
-                scriptPath = devScript
-            } else {
-                scriptPath = (currentDir as NSString).appendingPathComponent("mac/switch_mouse.py")
-            }
+        guard let scriptPath = findScriptPath() else {
+            statusMenuItem.title = "Status: switch_mouse.py not found"
+            isSwitching = false
+            actionMenuItem.isEnabled = true
+            return
         }
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -138,7 +165,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
             process.arguments = [scriptPath]
             
-            // Set PATH environment
             var env = ProcessInfo.processInfo.environment
             env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "")
             process.environment = env
@@ -162,6 +188,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let blueutil = findBlueutil() else { return }
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
             let task = Process()
             task.executableURL = URL(fileURLWithPath: blueutil)
             task.arguments = ["--paired", "--format", "json"]
@@ -175,8 +202,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
                     for dev in json {
-                        let name = (dev["name"] as? String ?? "").lowercased()
-                        if name.contains("m337"), let addr = dev["address"] as? String {
+                        let name = dev["name"] as? String ?? ""
+                        if self.isTargetMouse(name: name), let addr = dev["address"] as? String {
                             let unpairTask = Process()
                             unpairTask.executableURL = URL(fileURLWithPath: blueutil)
                             unpairTask.arguments = ["--unpair", addr]
@@ -189,7 +216,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {}
             
             DispatchQueue.main.async {
-                self?.checkStatus()
+                self.checkStatus()
             }
         }
     }

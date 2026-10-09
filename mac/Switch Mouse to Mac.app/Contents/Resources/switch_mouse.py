@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Logitech M337 Bluetooth Mouse Quick Switcher for macOS
+Logitech M336/M337/M535 Bluetooth Mouse Quick Switcher for macOS
 Automates:
 1. Checking if the mouse is already connected.
-2. Unpairing any existing stale pairing profile from macOS Bluetooth settings.
+2. Unpairing any stale pairing profile from macOS Bluetooth settings.
 3. Discovering the mouse in pairing mode.
-4. Pairing with the mouse.
+4. Pairing with the mouse (handles PIN 0000 and simple pairing).
 5. Connecting to the mouse and confirming active connection.
 """
 
@@ -21,7 +21,18 @@ from pathlib import Path
 CONFIG_DIR = Path.home() / ".config" / "bt-mouse-switcher"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-DEFAULT_DEVICE_NAME_PATTERNS = ["Logitech M337", "M337", "Bluetooth Mouse M337"]
+DEFAULT_DEVICE_NAME_PATTERNS = [
+    "Bluetooth Mouse M336/M337/M535",
+    "Logitech M336/M337/M535",
+    "Bluetooth Mouse",
+    "Logitech M337",
+    "Logitech M336",
+    "Logitech M535",
+    "M336/M337/M535",
+    "M337",
+    "M336",
+    "M535",
+]
 DEFAULT_TIMEOUT_SEC = 15
 
 def get_blueutil_path():
@@ -85,12 +96,60 @@ def run_cmd(args, timeout=10, input_data=None):
     except Exception as e:
         return -1, "", str(e)
 
-def is_matching_device(device, target_address=None, target_names=None):
-    """Check if device matches target MAC address or name."""
+def get_iobluetooth_device(address):
+    """Get IOBluetoothDevice instance if PyObjC is available."""
+    try:
+        import objc
+        from Foundation import NSBundle
+        bundle = NSBundle.bundleWithPath_("/System/Library/Frameworks/IOBluetooth.framework")
+        if bundle:
+            bundle.load()
+            IOBluetoothDevice = objc.lookUpClass("IOBluetoothDevice")
+            if IOBluetoothDevice:
+                return IOBluetoothDevice.deviceWithAddressString_(address)
+    except Exception:
+        pass
+    return None
+
+def resolve_device_name(address):
+    """Attempt to resolve device name if missing from scan."""
+    dev = get_iobluetooth_device(address)
+    if dev:
+        try:
+            name = dev.name() or dev.nameOrAddress()
+            if name and name.lower() != address.lower().replace("-", ":"):
+                return name
+        except Exception:
+            pass
+    code, out, _ = run_cmd([BLUEUTIL, "--info", address, "--format", "json"], timeout=4)
+    if code == 0 and out:
+        try:
+            info = json.loads(out)
+            return info.get("name")
+        except Exception:
+            pass
+    return None
+
+def is_mouse_device(address):
+    """Check if device class indicates a mouse / pointing device peripheral."""
+    dev = get_iobluetooth_device(address)
+    if dev:
+        try:
+            major = getattr(dev, "deviceClassMajor", lambda: 0)()
+            minor = getattr(dev, "deviceClassMinor", lambda: 0)()
+            # Major 5 = Peripheral, Minor 2 = Pointing device / mouse
+            if major == 5 and minor == 2:
+                return True
+        except Exception:
+            pass
+    return False
+
+def is_matching_device(device, target_address=None, target_names=None, check_peripheral_type=False):
+    """Check if device matches target MAC address, name, or device class."""
     if not isinstance(device, dict):
         return False
-    dev_addr = device.get("address", "").strip().lower()
-    dev_name = device.get("name", "").strip().lower()
+    dev_addr = (device.get("address") or "").strip().lower()
+    dev_name = (device.get("name") or "").strip().lower()
 
     if target_address and dev_addr == target_address.strip().lower():
         return True
@@ -99,8 +158,23 @@ def is_matching_device(device, target_address=None, target_names=None):
         target_names = DEFAULT_DEVICE_NAME_PATTERNS
 
     for pattern in target_names:
-        if pattern.strip().lower() in dev_name:
+        p = pattern.strip().lower()
+        if p and p in dev_name:
             return True
+
+    # If name is not yet resolved, query the device directly
+    if not dev_name or dev_name == dev_addr.replace("-", ":"):
+        resolved = resolve_device_name(dev_addr)
+        if resolved:
+            resolved_lower = resolved.strip().lower()
+            for pattern in target_names:
+                p = pattern.strip().lower()
+                if p and p in resolved_lower:
+                    return True
+
+    # If enabled, check if device class is a mouse
+    if check_peripheral_type and is_mouse_device(dev_addr):
+        return True
 
     return False
 
@@ -123,12 +197,27 @@ def get_paired_devices():
     return []
 
 def unpair_device(address, name="Device"):
-    """Unpair device by MAC address."""
+    """Unpair device and remove link keys from macOS Bluetooth."""
     print(f"Unpairing stale {name} ({address})...")
-    code, out, err = run_cmd([BLUEUTIL, "--unpair", address])
-    # Give macOS Bluetooth daemon a moment to update pairing state
-    time.sleep(1.2)
-    return code == 0
+    # Method 1: PyObjC direct IOBluetooth removal
+    dev = get_iobluetooth_device(address)
+    if dev:
+        try:
+            if hasattr(dev, "removeLinkKey"):
+                dev.removeLinkKey()
+            if hasattr(dev, "forceRemove"):
+                dev.forceRemove()
+            elif hasattr(dev, "remove"):
+                dev.remove()
+        except Exception as e:
+            print(f"IOBluetooth unpair note: {e}", file=sys.stderr)
+
+    # Method 2: blueutil unpair
+    run_cmd([BLUEUTIL, "--unpair", address], timeout=5)
+
+    # Allow macOS Bluetooth daemon to clear pairing database
+    time.sleep(1.0)
+    return True
 
 def inquiry_scan(duration=4):
     """Perform a short Bluetooth inquiry scan."""
@@ -141,30 +230,69 @@ def inquiry_scan(duration=4):
     return []
 
 def pair_device(address):
-    """Pair with device using blueutil."""
+    """Pair with device using blueutil (handles PIN 0000 and SSP user confirmation)."""
     print(f"Pairing with {address}...")
-    # Pipe "yes\n" in case simple pairing confirmation is requested
-    code, out, err = run_cmd([BLUEUTIL, "--pair", address], timeout=15, input_data="yes\n")
-    time.sleep(0.8)
-    return code == 0
 
-def connect_device(address, max_attempts=3):
+    # 1. Try pairing with PIN '0000' (standard for Logitech M336/M337/M535)
+    # Also supply 'yes\n' in case simple pairing confirmation is required
+    code, out, err = run_cmd([BLUEUTIL, "--pair", address, "0000"], timeout=15, input_data="yes\n")
+    if code == 0:
+        print("Pairing successful.")
+        time.sleep(1.0)
+        return True
+
+    # 2. Try pairing without explicit PIN (SSP Just Works)
+    print("Retrying pairing without explicit PIN...")
+    code, out, err = run_cmd([BLUEUTIL, "--pair", address], timeout=15, input_data="yes\n")
+    if code == 0:
+        print("Pairing successful.")
+        time.sleep(1.0)
+        return True
+
+    # 3. Check if device is paired anyway
+    code, out, _ = run_cmd([BLUEUTIL, "--info", address, "--format", "json"], timeout=5)
+    if code == 0 and out:
+        try:
+            info = json.loads(out)
+            if info.get("paired") is True:
+                print("Device confirmed paired.")
+                return True
+        except Exception:
+            pass
+
+    return False
+
+def connect_device(address, max_attempts=4):
     """Connect to paired device with retries."""
     print(f"Connecting to {address}...")
     for attempt in range(1, max_attempts + 1):
-        run_cmd([BLUEUTIL, "--connect", address], timeout=10)
-        time.sleep(1.0)
-        code, out, _ = run_cmd([BLUEUTIL, "--is-connected", address])
+        run_cmd([BLUEUTIL, "--connect", address], timeout=8)
+        time.sleep(1.2)
+        code, out, _ = run_cmd([BLUEUTIL, "--is-connected", address], timeout=4)
         if out == "1":
             return True
-        print(f"Connection attempt {attempt} not ready yet, retrying...")
-        time.sleep(0.5)
+
+        # Fallback: attempt direct openConnection via IOBluetooth
+        dev = get_iobluetooth_device(address)
+        if dev and hasattr(dev, "openConnection"):
+            try:
+                dev.openConnection()
+            except Exception:
+                pass
+
+        time.sleep(1.0)
+        code, out, _ = run_cmd([BLUEUTIL, "--is-connected", address], timeout=4)
+        if out == "1":
+            return True
+
+        print(f"Connection attempt {attempt}/{max_attempts} pending, retrying...")
+
     return False
 
 def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC, silent=False):
     """Main workflow to switch mouse to Mac."""
     if not BLUEUTIL:
-        msg = "blueutil not found! Please install it with: brew install blueutil"
+        msg = "blueutil not found. Please install it with: brew install blueutil"
         print(msg, file=sys.stderr)
         if not silent:
             notify("Bluetooth Mouse Switcher Error", msg, sound="Basso")
@@ -191,24 +319,23 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
 
     if existing_match:
         addr = existing_match.get("address")
-        name = existing_match.get("name", "Logitech M337")
+        name = existing_match.get("name") or "Logitech M336/M337/M535"
         if existing_match.get("connected") is True:
-            # Check actual live connection
             _, is_conn, _ = run_cmd([BLUEUTIL, "--is-connected", addr])
             if is_conn == "1":
                 print(f"{name} ({addr}) is already connected and active.")
                 if not silent:
-                    notify("Logitech M337", "Mouse is already connected and active!", sound="Glass")
+                    notify("Logitech M336/M337/M535", "Mouse is already connected and active.", sound="Glass")
                 return 0
 
-        # It is in paired list, but not connected (or link key is obsolete from Windows)
+        # Found stale pairing profile, unpair it
         print(f"Found existing pairing for {name} ({addr}). Removing stale profile...")
         unpair_device(addr, name=name)
 
-    # 2. Prompt user and search for mouse in discovery / pairing mode
+    # 2. Search for mouse in pairing mode
     print(f"Searching for mouse (timeout: {timeout}s)...")
     if not silent:
-        notify("Switching Mouse to Mac", "Searching for Logitech M337...\nPress pairing button on mouse!", sound="Ping")
+        notify("Switching Mouse to Mac", "Searching for Logitech M336/M337/M535...\nPress pairing button on mouse.", sound="Ping")
 
     start_time = time.time()
     discovered_target = None
@@ -217,7 +344,7 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
     while (time.time() - start_time) < timeout:
         devices = inquiry_scan(duration=scan_chunk)
         for dev in devices:
-            if is_matching_device(dev, target_address=known_address, target_names=target_names):
+            if is_matching_device(dev, target_address=known_address, target_names=target_names, check_peripheral_type=True):
                 discovered_target = dev
                 break
         if discovered_target:
@@ -225,14 +352,14 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
         print(f"Still searching... (elapsed: {int(time.time() - start_time)}s)")
 
     if not discovered_target:
-        msg = f"Could not find Logitech M337 within {timeout}s. Press the button on the bottom of the mouse and try again!"
+        msg = f"Could not find Logitech M336/M337/M535 within {timeout}s. Press the button underneath the mouse and try again."
         print(msg, file=sys.stderr)
         if not silent:
-            notify("Mouse Switch Failed", "Logitech M337 not found.\nPress pairing button underneath mouse and retry.", sound="Basso")
+            notify("Mouse Switch Failed", "Logitech M336/M337/M535 not found.\nPress pairing button underneath mouse and retry.", sound="Basso")
         return 1
 
     target_addr = discovered_target.get("address")
-    target_name = discovered_target.get("name", "Logitech M337")
+    target_name = discovered_target.get("name") or resolve_device_name(target_addr) or "Logitech M336/M337/M535"
     print(f"Found {target_name} at {target_addr}!")
 
     # Update config with discovered address
@@ -242,26 +369,26 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
     # 3. Pair
     pair_success = pair_device(target_addr)
     if not pair_success:
-        print(f"Warning: Pair command returned non-zero, attempting connection anyway...")
+        print("Warning: Pair command returned non-zero, attempting connection anyway...")
 
     # 4. Connect
-    connected = connect_device(target_addr, max_attempts=3)
+    connected = connect_device(target_addr, max_attempts=4)
     if connected:
         success_msg = f"{target_name} connected successfully!"
         print(success_msg)
         if not silent:
-            notify("Logitech M337 Connected", "Mouse is now connected and ready to use!", sound="Glass")
+            notify("Logitech M336/M337/M535 Connected", "Mouse is now connected and ready to use.", sound="Glass")
         return 0
     else:
         err_msg = f"Paired with {target_name}, but connection timed out. Click mouse buttons to wake it up."
         print(err_msg, file=sys.stderr)
         if not silent:
-            notify("Connection Pending", "Paired successfully! Click a mouse button to finish connecting.", sound="Ping")
+            notify("Connection Pending", "Paired successfully. Click a mouse button to finish connecting.", sound="Ping")
         return 0
 
 def main():
-    parser = argparse.ArgumentParser(description="Logitech M337 Bluetooth Mouse Quick Switcher for macOS")
-    parser.add_argument("--name", nargs="*", default=None, help="Device name pattern(s) to match (default: Logitech M337, M337)")
+    parser = argparse.ArgumentParser(description="Logitech M336/M337/M535 Bluetooth Mouse Quick Switcher for macOS")
+    parser.add_argument("--name", nargs="*", default=None, help="Device name pattern(s) to match")
     parser.add_argument("--mac", default=None, help="Explicit Bluetooth MAC address (e.g. xx-xx-xx-xx-xx-xx)")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SEC, help="Search timeout in seconds (default: 15)")
     parser.add_argument("--silent", action="store_true", help="Suppress notifications and audio chimes")
