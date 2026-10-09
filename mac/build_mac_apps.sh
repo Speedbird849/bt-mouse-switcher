@@ -82,6 +82,10 @@ cat << 'EOF' > "$APP_BUNDLE/Contents/Info.plist"
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Bluetooth Mouse Switcher needs Bluetooth access to discover, unpair, and connect your Bluetooth mouse.</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>Bluetooth Mouse Switcher needs Bluetooth access to discover, unpair, and connect your Bluetooth mouse.</string>
 </dict>
 </plist>
 EOF
