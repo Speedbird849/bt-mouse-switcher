@@ -21,8 +21,8 @@ else
     echo "blueutil is installed ($(blueutil -v))"
 fi
 
-# 2. Build Apps
-echo "==> Building macOS Application Bundles..."
+# 2. Build App
+echo "==> Building macOS Application..."
 "$DIR/build_mac_apps.sh"
 
 # 3. Install App to /Applications (or fallback to ~/Applications)
@@ -36,8 +36,8 @@ echo "==> Installing to $APP_DIR..."
 rm -rf "$APP_DIR/Switch Mouse to Mac.app"
 cp -R "$DIR/Switch Mouse to Mac.app" "$APP_DIR/"
 
-rm -rf "$APP_DIR/Switch Mouse Menu Bar.app"
-cp -R "$DIR/Switch Mouse Menu Bar.app" "$APP_DIR/"
+# Remove legacy Menu Bar app if it exists
+rm -rf "$APP_DIR/Switch Mouse Menu Bar.app" "$HOME/Applications/Switch Mouse Menu Bar.app"
 
 # 4. CLI tool symlink
 mkdir -p "$BIN_DIR"
@@ -53,11 +53,10 @@ echo ""
 echo "Ways to use your single-click mouse switcher:"
 echo " 1. Spotlight / Raycast: Press Cmd+Space and type 'Switch Mouse to Mac'"
 echo " 2. Dock: Drag '$APP_DIR/Switch Mouse to Mac.app' to your Dock"
-echo " 3. Menu Bar: Launch '$APP_DIR/Switch Mouse Menu Bar.app'"
-echo " 4. Terminal: Run 'bt-mouse-switch' from anywhere (ensure ~/.local/bin is in PATH)"
+echo " 3. Terminal: Run 'bt-mouse-switch' from anywhere (ensure ~/.local/bin is in PATH)"
 echo ""
 echo "How switching works:"
-echo " 1. Push the Bluetooth button on the bottom of the Logitech mouse (blue light blinks fast)."
-echo " 2. Click 'Switch Mouse to Mac'."
-echo " 3. It will automatically forget the old pairing, find the mouse, pair, and connect."
+echo " 1. Push the Bluetooth pairing button on the bottom of the mouse (blue light blinks rapidly)."
+echo " 2. Open 'Switch Mouse to Mac' and click 'Disconnect, Forget & Reconnect'."
+echo " 3. It will automatically disconnect & forget the old profile, wait a second, search for the mouse, pair, and connect."
 echo ""

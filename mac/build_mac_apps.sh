@@ -23,7 +23,7 @@ for s in sizes:
         img = Cocoa.NSImage.alloc().initWithSize_(NSMakeSize(px, px))
         img.lockFocus()
         
-        # Background gradient or smooth rounded rect
+        # Background rounded rect
         bg = Cocoa.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.12, 0.48, 0.90, 1.0)
         bg.setFill()
         path = Cocoa.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
@@ -55,38 +55,23 @@ fi
 
 ICNS_FILE="/tmp/BTMouseIcon.icns"
 
-echo "==> 2. Building 'Switch Mouse to Mac.app' (One-Click Launcher)..."
-LAUNCHER_APP="$DIR/Switch Mouse to Mac.app"
-rm -rf "$LAUNCHER_APP"
-mkdir -p "$LAUNCHER_APP/Contents/MacOS"
-mkdir -p "$LAUNCHER_APP/Contents/Resources"
+echo "==> 2. Building 'Switch Mouse to Mac.app'..."
+APP_BUNDLE="$DIR/Switch Mouse to Mac.app"
+rm -rf "$APP_BUNDLE"
+mkdir -p "$APP_BUNDLE/Contents/MacOS"
+mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-cp "$ICNS_FILE" "$LAUNCHER_APP/Contents/Resources/AppIcon.icns"
-cp "$DIR/switch_mouse.py" "$LAUNCHER_APP/Contents/Resources/switch_mouse.py"
-chmod +x "$LAUNCHER_APP/Contents/Resources/switch_mouse.py"
+cp "$ICNS_FILE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
-cat << 'EOF' > "$LAUNCHER_APP/Contents/MacOS/Switch Mouse"
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-RESOURCES="$DIR/../Resources"
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-OUTPUT=$(/usr/bin/python3 "$RESOURCES/switch_mouse.py" "$@" 2>&1)
-EXIT_CODE=$?
-if [ $EXIT_CODE -ne 0 ]; then
-    ESCAPED_OUTPUT=$(echo "$OUTPUT" | sed 's/"/\\"/g')
-    osascript -e "display alert \"Mouse Switch Failed\" message \"$ESCAPED_OUTPUT\n\nMake sure the pairing button underneath the mouse is blinking rapidly and try again.\""
-fi
-exit $EXIT_CODE
-EOF
-chmod +x "$LAUNCHER_APP/Contents/MacOS/Switch Mouse"
+swiftc "$DIR/App.swift" -o "$APP_BUNDLE/Contents/MacOS/SwitchMouseApp" -framework Cocoa -framework IOBluetooth
 
-cat << 'EOF' > "$LAUNCHER_APP/Contents/Info.plist"
+cat << 'EOF' > "$APP_BUNDLE/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>Switch Mouse</string>
+    <string>SwitchMouseApp</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
@@ -97,51 +82,11 @@ cat << 'EOF' > "$LAUNCHER_APP/Contents/Info.plist"
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
-    <key>LSUIElement</key>
-    <true/>
 </dict>
 </plist>
 EOF
 
-echo "==> 3. Building 'Switch Mouse Menu Bar.app'..."
-MENUBAR_APP="$DIR/Switch Mouse Menu Bar.app"
-rm -rf "$MENUBAR_APP"
-mkdir -p "$MENUBAR_APP/Contents/MacOS"
-mkdir -p "$MENUBAR_APP/Contents/Resources"
-
-cp "$ICNS_FILE" "$MENUBAR_APP/Contents/Resources/AppIcon.icns"
-cp "$DIR/switch_mouse.py" "$MENUBAR_APP/Contents/Resources/switch_mouse.py"
-chmod +x "$MENUBAR_APP/Contents/Resources/switch_mouse.py"
-
-swiftc "$DIR/MenuBarApp.swift" -o "$MENUBAR_APP/Contents/MacOS/MenuBarApp" -framework Cocoa
-
-cat << 'EOF' > "$MENUBAR_APP/Contents/Info.plist"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>MenuBarApp</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.btmouseswitcher.menubar</string>
-    <key>CFBundleName</key>
-    <string>Switch Mouse Menu Bar</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>LSUIElement</key>
-    <true/>
-</dict>
-</plist>
-EOF
-
-# Clean up temp binary if created
-rm -f "$DIR/MenuBarApp"
 rm -rf "$BUILD_DIR"
 
 echo "==> Done! Successfully created:"
-echo "    - $LAUNCHER_APP"
-echo "    - $MENUBAR_APP"
+echo "    - $APP_BUNDLE"

@@ -1,6 +1,6 @@
 # Logitech M336/M337/M535 Quick Switcher
 
-A 1-click solution to seamlessly switch a single-host Bluetooth mouse, between macOS and Windows without ever manually digging into Bluetooth Settings.
+A 1-click solution to seamlessly switch a single-host Bluetooth mouse between macOS and Windows without ever manually digging into Bluetooth Settings.
 
 ---
 
@@ -13,37 +13,28 @@ The M336/M337/M535 mouse is a single-host Bluetooth device (it does not have mul
 
 ## The Solution
 This tool automates the entire cycle into a single click:
-1. Checks if the mouse is already active.
-2. Automatically forgets / unpairs the stale device profile and link keys.
-3. Discovers the mouse in pairing mode (matching the exact name "Bluetooth Mouse M336/M337/M535").
-4. Pairs and connects to it automatically (handling PIN 0000 and Simple Pairing).
-5. Displays native system notifications and audio feedback.
+1. Disconnects and completely forgets `Bluetooth Mouse M336/M337/M535` from macOS Bluetooth settings (clearing link keys).
+2. Waits a second for the Bluetooth subsystem to reset.
+3. Searches for the device again in pairing mode.
+4. Pairs and connects to it automatically.
 
 ---
 
 ## macOS Setup
 
-The applications are located in your `/Applications` folder:
+The application is installed in `/Applications`:
 - `/Applications/Switch Mouse to Mac.app`
-- `/Applications/Switch Mouse Menu Bar.app`
 
-### 4 Ways to Trigger in a Single Click:
+### Using the App:
+1. **Launch the App:** Open `/Applications/Switch Mouse to Mac.app` (or launch via Spotlight: <kbd>Cmd</kbd> + <kbd>Space</kbd> -> `Switch Mouse to Mac`).
+2. **Put the mouse into pairing mode:** Press the Bluetooth button on the bottom of the mouse (blue LED blinks rapidly).
+3. **Click the Button:** Click **"Disconnect, Forget & Reconnect"** in the app window.
+4. The app handles disconnecting, forgetting, searching, pairing, and reconnecting automatically with live progress.
 
-1. **Spotlight / Raycast / Alfred:**
-   - Press <kbd>Cmd</kbd> + <kbd>Space</kbd> and type `Switch Mouse to Mac`. Hit <kbd>Enter</kbd>.
-2. **macOS Dock:**
-   - Drag `/Applications/Switch Mouse to Mac.app` into your Dock for a permanent 1-click icon.
-3. **Menu Bar App:**
-   - Launch `/Applications/Switch Mouse Menu Bar.app`.
-   - A `Mouse` icon will sit in your macOS menu bar with live connection status (`[ON]` / `[OFF]`) and a 1-click `Switch to Mac (Pair & Connect)` button.
-   - (To keep it running at startup: add it to *System Settings > General > Login Items*).
-4. **Terminal / Shell:**
-   - Run `bt-mouse-switch` from any terminal window.
+You can also drag `/Applications/Switch Mouse to Mac.app` to your macOS Dock for fast 1-click access anytime.
 
-### Switching Routine on Mac
-1. Press the Bluetooth button on the bottom of the mouse (blue LED blinks fast).
-2. Click **Switch Mouse to Mac** (or click it in the Menu Bar / Spotlight / Dock).
-3. The mouse will unpair the old profile, discover the mouse, pair, and connect.
+### Command Line
+Run `bt-mouse-switch` from any terminal window (or `python3 mac/switch_mouse.py`).
 
 ---
 
@@ -66,12 +57,11 @@ The Windows solution is ready in the [`windows/`](windows) directory:
 ```
 bt-mouse-switcher/
 ├── mac/
-│   ├── switch_mouse.py             # Core switching engine (Python 3 + blueutil)
-│   ├── MenuBarApp.swift            # Native macOS menu bar status item (Swift)
+│   ├── App.swift                   # Native macOS UI App (Swift)
+│   ├── switch_mouse.py             # CLI switching script (Python 3 + blueutil)
 │   ├── build_mac_apps.sh           # App packager and icon generator
 │   ├── install_mac.sh              # One-step installer
-│   ├── Switch Mouse to Mac.app     # One-click desktop/dock app
-│   └── Switch Mouse Menu Bar.app   # Menu bar status item app
+│   └── Switch Mouse to Mac.app     # Window application bundle
 ├── windows/
 │   ├── Switch-Mouse.ps1            # Windows Bluetooth WinRT / btpair switcher
 │   ├── Switch-Mouse.bat            # Windows batch shortcut launcher
