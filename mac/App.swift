@@ -75,7 +75,7 @@ class MainWindowController: NSWindowController {
         detailLabel.cell?.wraps = true
         contentView.addSubview(detailLabel)
 
-        refreshStatus()
+        refreshStatus(autoStart: true)
         timer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { [weak self] _ in
             self?.refreshStatus()
         }
@@ -153,7 +153,9 @@ class MainWindowController: NSWindowController {
         return false
     }
 
-    func refreshStatus() {
+    var hasCheckedAutoStart = false
+
+    func refreshStatus(autoStart: Bool = false) {
         guard !isSwitching else { return }
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self else { return }
@@ -190,6 +192,14 @@ class MainWindowController: NSWindowController {
                     self.statusLabel.stringValue = "Status: Ready to Switch"
                     self.statusLabel.textColor = .secondaryLabelColor
                     self.detailLabel.stringValue = "Make sure the pairing button on the mouse is blinking."
+                }
+
+                // Auto-start process on app launch if the mouse is not already connected
+                if autoStart && !self.hasCheckedAutoStart {
+                    self.hasCheckedAutoStart = true
+                    if !connected {
+                        self.onSwitchClicked()
+                    }
                 }
             }
         }
