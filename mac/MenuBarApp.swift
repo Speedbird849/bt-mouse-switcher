@@ -13,7 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.title = "Mouse"
+            button.title = "🖱️"
             button.toolTip = exactDeviceName + " Quick Switcher"
         }
         
@@ -86,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 task.waitUntilExit()
                 
                 var statusText = "Status: Disconnected / Not Paired"
-                var icon = "Mouse"
+                var icon = "🖱️"
                 
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
                     for dev in json {
@@ -95,10 +95,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             let connected = dev["connected"] as? Bool ?? false
                             if connected {
                                 statusText = "Status: Connected"
-                                icon = "Mouse [ON]"
+                                icon = "🖱️ [ON]"
                             } else {
                                 statusText = "Status: Paired (Disconnected)"
-                                icon = "Mouse [OFF]"
+                                icon = "🖱️ [OFF]"
                             }
                             break
                         }
@@ -153,7 +153,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !isSwitching else { return }
         isSwitching = true
         statusMenuItem.title = "Status: Switching..."
-        statusItem.button?.title = "Mouse [...]"
+        statusItem.button?.title = "🖱️ [...]"
         actionMenuItem.isEnabled = false
         
         guard let scriptPath = findScriptPath() else {
