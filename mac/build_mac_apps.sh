@@ -7,8 +7,10 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 echo "==> 1. Generating App Icon..."
+if [ ! -f /tmp/BTMouseIcon.icns ]; then
 python3 - << 'EOF'
 import Cocoa, os, subprocess
+from Foundation import NSMakeSize, NSMakeRect, NSZeroRect
 
 iconset_dir = '/tmp/BTMouseIcon.iconset'
 os.makedirs(iconset_dir, exist_ok=True)
@@ -18,7 +20,7 @@ for s in sizes:
     for scale in [1, 2]:
         px = s * scale
         name = f"icon_{s}x{s}.png" if scale == 1 else f"icon_{s}x{s}@2x.png"
-        img = Cocoa.NSImage.alloc().initWithSize_(Cocoa.NSMakeSize(px, px))
+        img = Cocoa.NSImage.alloc().initWithSize_(NSMakeSize(px, px))
         img.lockFocus()
         
         # Background gradient or smooth rounded rect
@@ -49,6 +51,7 @@ for s in sizes:
 
 subprocess.run(['iconutil', '-c', 'icns', iconset_dir, '-o', '/tmp/BTMouseIcon.icns'], check=True)
 EOF
+fi
 
 ICNS_FILE="/tmp/BTMouseIcon.icns"
 
@@ -67,7 +70,13 @@ cat << 'EOF' > "$LAUNCHER_APP/Contents/MacOS/Switch Mouse"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 RESOURCES="$DIR/../Resources"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-exec /usr/bin/python3 "$RESOURCES/switch_mouse.py" "$@"
+OUTPUT=$(/usr/bin/python3 "$RESOURCES/switch_mouse.py" "$@" 2>&1)
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    ESCAPED_OUTPUT=$(echo "$OUTPUT" | sed 's/"/\\"/g')
+    osascript -e "display alert \"Mouse Switch Failed\" message \"$ESCAPED_OUTPUT\n\nMake sure the pairing button underneath the mouse is blinking rapidly and try again.\""
+fi
+exit $EXIT_CODE
 EOF
 chmod +x "$LAUNCHER_APP/Contents/MacOS/Switch Mouse"
 

@@ -20,8 +20,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenu()
         checkStatus()
         
-        // Periodically refresh status every 5 seconds
-        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Periodically refresh status every 4 seconds
+        timer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { [weak self] _ in
             self?.checkStatus()
         }
     }
@@ -152,14 +152,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func performSwitch() {
         guard !isSwitching else { return }
         isSwitching = true
-        statusMenuItem.title = "Status: Switching..."
-        statusItem.button?.title = "🖱️ [...]"
+        statusMenuItem.title = "Status: Searching for mouse..."
+        statusItem.button?.title = "🖱️ [Searching...]"
         actionMenuItem.isEnabled = false
         
         guard let scriptPath = findScriptPath() else {
             statusMenuItem.title = "Status: switch_mouse.py not found"
             isSwitching = false
             actionMenuItem.isEnabled = true
+            statusItem.button?.title = "🖱️ [OFF]"
             return
         }
         
@@ -168,21 +169,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
             process.arguments = [scriptPath]
             
+            let pipe = Pipe()
+            let errPipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = errPipe
+            
             var env = ProcessInfo.processInfo.environment
             env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "")
             process.environment = env
             
+            var outText = ""
+            var errText = ""
             do {
                 try process.run()
+                let outData = pipe.fileHandleForReading.readDataToEndOfFile()
+                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
+                outText = String(data: outData, encoding: .utf8) ?? ""
+                errText = String(data: errData, encoding: .utf8) ?? ""
             } catch {
-                print("Failed to run script: \(error)")
+                errText = "\(error)"
             }
+            
+            let exitCode = process.terminationStatus
             
             DispatchQueue.main.async {
                 self?.isSwitching = false
                 self?.actionMenuItem.isEnabled = true
                 self?.checkStatus()
+                
+                if exitCode != 0 {
+                    let alert = NSAlert()
+                    alert.messageText = "Mouse Switch Failed"
+                    alert.informativeText = errText.isEmpty ? (outText.isEmpty ? "Could not find Bluetooth Mouse M336/M337/M535.\n\nMake sure the pairing button underneath the mouse is blinking rapidly and try again." : outText) : errText
+                    alert.alertStyle = .warning
+                    alert.runModal()
+                }
             }
         }
     }

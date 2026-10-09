@@ -5,7 +5,7 @@ Automates:
 1. Checking if the mouse is already connected.
 2. Unpairing any stale pairing profile from macOS Bluetooth settings.
 3. Discovering the mouse in pairing mode.
-4. Pairing with the mouse (handles PIN 0000 and simple pairing).
+4. Pairing with the mouse.
 5. Connecting to the mouse and confirming active connection.
 """
 
@@ -31,7 +31,7 @@ DEFAULT_DEVICE_NAME_PATTERNS = [
     "M535",
     "Bluetooth Mouse",
 ]
-DEFAULT_TIMEOUT_SEC = 15
+DEFAULT_TIMEOUT_SEC = 20
 
 def get_blueutil_path():
     """Find blueutil executable."""
@@ -128,35 +128,22 @@ def resolve_device_name(address):
             pass
     return None
 
-def is_mouse_device(address):
-    """Check if device class indicates a mouse / pointing device peripheral."""
-    dev = get_iobluetooth_device(address)
-    if dev:
-        try:
-            major = getattr(dev, "deviceClassMajor", lambda: 0)()
-            minor = getattr(dev, "deviceClassMinor", lambda: 0)()
-            # Major 5 = Peripheral, Minor 2 = Pointing device / mouse
-            if major == 5 and minor == 2:
-                return True
-        except Exception:
-            pass
-    return False
-
-def is_matching_device(device, target_address=None, target_names=None, check_peripheral_type=False):
+def is_matching_device(device, target_address=None, target_names=None):
     """Check if device matches target MAC address, exact name, or patterns."""
     if not isinstance(device, dict):
         return False
     dev_addr = (device.get("address") or "").strip().lower()
     dev_name = (device.get("name") or "").strip()
 
+    # 1. Match by MAC address
     if target_address and dev_addr == target_address.strip().lower():
         return True
 
-    # 1. Exact match check (case-insensitive)
+    # 2. Match by exact name
     if dev_name.lower() == EXACT_DEVICE_NAME.lower():
         return True
 
-    # 2. Pattern check
+    # 3. Match by name pattern
     if not target_names:
         target_names = DEFAULT_DEVICE_NAME_PATTERNS
 
@@ -166,7 +153,7 @@ def is_matching_device(device, target_address=None, target_names=None, check_per
         if p and p in dev_name_lower:
             return True
 
-    # 3. If name is not yet resolved, query the device directly
+    # 4. If name was not resolved, try querying
     if not dev_name or dev_name.lower() == dev_addr.replace("-", ":"):
         resolved = resolve_device_name(dev_addr)
         if resolved:
@@ -177,10 +164,6 @@ def is_matching_device(device, target_address=None, target_names=None, check_per
                 p = pattern.strip().lower()
                 if p and p in resolved_lower:
                     return True
-
-    # 4. If enabled, check if device class is a mouse
-    if check_peripheral_type and is_mouse_device(dev_addr):
-        return True
 
     return False
 
@@ -225,8 +208,8 @@ def unpair_device(address, name=EXACT_DEVICE_NAME):
     time.sleep(1.0)
     return True
 
-def inquiry_scan(duration=4):
-    """Perform a short Bluetooth inquiry scan."""
+def inquiry_scan(duration=5):
+    """Perform a Bluetooth inquiry scan with adequate time for remote name resolution."""
     code, stdout, _ = run_cmd([BLUEUTIL, "--inquiry", str(duration), "--format", "json"], timeout=duration + 5)
     if code == 0 and stdout:
         try:
@@ -236,19 +219,19 @@ def inquiry_scan(duration=4):
     return []
 
 def pair_device(address):
-    """Pair with device using blueutil (handles PIN 0000 and SSP user confirmation)."""
+    """Pair with device using blueutil."""
     print(f"Pairing with {address}...")
 
-    # 1. Try pairing with PIN '0000' (standard for Bluetooth Mouse M336/M337/M535)
-    code, out, err = run_cmd([BLUEUTIL, "--pair", address, "0000"], timeout=15, input_data="yes\n")
+    # 1. Try standard pair first (works directly on Bluetooth Mouse M336/M337/M535)
+    code, out, err = run_cmd([BLUEUTIL, "--pair", address], timeout=15, input_data="yes\n")
     if code == 0:
         print("Pairing successful.")
         time.sleep(1.0)
         return True
 
-    # 2. Try pairing without explicit PIN (SSP Just Works)
-    print("Retrying pairing without explicit PIN...")
-    code, out, err = run_cmd([BLUEUTIL, "--pair", address], timeout=15, input_data="yes\n")
+    # 2. Try pairing with PIN '0000' in case legacy PIN is requested
+    print("Retrying pairing with PIN 0000...")
+    code, out, err = run_cmd([BLUEUTIL, "--pair", address, "0000"], timeout=15, input_data="yes\n")
     if code == 0:
         print("Pairing successful.")
         time.sleep(1.0)
@@ -277,7 +260,7 @@ def connect_device(address, max_attempts=4):
         if out == "1":
             return True
 
-        # Fallback: attempt direct openConnection via IOBluetooth
+        # Direct openConnection fallback via IOBluetooth
         dev = get_iobluetooth_device(address)
         if dev and hasattr(dev, "openConnection"):
             try:
@@ -306,10 +289,7 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
     check_bluetooth_power()
 
     config = load_config()
-    if target_mac:
-        known_address = target_mac
-    else:
-        known_address = config.get("last_address")
+    target_address = target_mac or config.get("last_address")
 
     if not target_names:
         target_names = config.get("target_names", DEFAULT_DEVICE_NAME_PATTERNS)
@@ -318,7 +298,7 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
     paired = get_paired_devices()
     existing_match = None
     for dev in paired:
-        if is_matching_device(dev, target_address=known_address, target_names=target_names):
+        if is_matching_device(dev, target_address=target_address, target_names=target_names):
             existing_match = dev
             break
 
@@ -344,12 +324,12 @@ def switch_mouse(target_mac=None, target_names=None, timeout=DEFAULT_TIMEOUT_SEC
 
     start_time = time.time()
     discovered_target = None
-    scan_chunk = 3
+    scan_chunk = 5
 
     while (time.time() - start_time) < timeout:
         devices = inquiry_scan(duration=scan_chunk)
         for dev in devices:
-            if is_matching_device(dev, target_address=known_address, target_names=target_names, check_peripheral_type=True):
+            if is_matching_device(dev, target_address=target_address, target_names=target_names):
                 discovered_target = dev
                 break
         if discovered_target:
@@ -395,7 +375,7 @@ def main():
     parser = argparse.ArgumentParser(description="Bluetooth Mouse M336/M337/M535 Quick Switcher for macOS")
     parser.add_argument("--name", nargs="*", default=None, help="Device name pattern(s) to match")
     parser.add_argument("--mac", default=None, help="Explicit Bluetooth MAC address (e.g. xx-xx-xx-xx-xx-xx)")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SEC, help="Search timeout in seconds (default: 15)")
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SEC, help="Search timeout in seconds (default: 20)")
     parser.add_argument("--silent", action="store_true", help="Suppress notifications and audio chimes")
     args = parser.parse_args()
 
