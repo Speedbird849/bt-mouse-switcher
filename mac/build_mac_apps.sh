@@ -7,7 +7,7 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 echo "==> 1. Generating App Icon..."
-if [ ! -f /tmp/BTMouseIcon.icns ]; then
+rm -f /tmp/BTMouseIcon.icns
 python3 - << 'EOF'
 import Cocoa, os, subprocess
 from Foundation import NSMakeSize, NSMakeRect, NSZeroRect
@@ -23,8 +23,8 @@ for s in sizes:
         img = Cocoa.NSImage.alloc().initWithSize_(NSMakeSize(px, px))
         img.lockFocus()
         
-        # Background rounded rect
-        bg = Cocoa.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.12, 0.48, 0.90, 1.0)
+        # Background rounded rect (light blue)
+        bg = Cocoa.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.35, 0.72, 0.98, 1.0)
         bg.setFill()
         path = Cocoa.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
             Cocoa.NSMakeRect(0, 0, px, px), px * 0.22, px * 0.22
@@ -51,7 +51,6 @@ for s in sizes:
 
 subprocess.run(['iconutil', '-c', 'icns', iconset_dir, '-o', '/tmp/BTMouseIcon.icns'], check=True)
 EOF
-fi
 
 ICNS_FILE="/tmp/BTMouseIcon.icns"
 
