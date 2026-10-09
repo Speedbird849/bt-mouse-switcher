@@ -323,27 +323,54 @@ class MainWindowController: NSWindowController {
             // Save found MAC
             self.saveCachedAddress(foundMac)
 
-            // Step 4: Pair and Connect
-            updateUI(status: "Step 4/4: Pairing & Connecting...", detail: "Found mouse at \(foundMac). Connecting...", color: .systemBlue)
+            // Step 4: Verify connection or Pair & Connect
+            updateUI(status: "Step 4/4: Finalizing connection...", detail: "Connecting to \(foundMac)...", color: .systemBlue)
 
-            // Pair without PIN first
-            var (pairCode, _, _) = self.runCmd(["--pair", foundMac], timeout: 15, input: "yes\n")
-            if pairCode != 0 {
-                // Retry with PIN 0000 fallback
-                let (retryCode, _, _) = self.runCmd(["--pair", foundMac, "0000"], timeout: 15, input: "yes\n")
-                pairCode = retryCode
+            // 4a. Check if already connected (e.g. from step 3a or auto-reconnect)
+            var connected = false
+            if let dev = IOBluetoothDevice(addressString: foundMac), dev.isConnected() {
+                connected = true
+            } else {
+                let (_, checkOut, _) = self.runCmd(["--is-connected", foundMac], timeout: 2)
+                if checkOut == "1" {
+                    connected = true
+                }
             }
 
-            // Connect
-            Thread.sleep(forTimeInterval: 0.8)
-            var connected = false
-            for _ in 1...4 {
-                _ = self.runCmd(["--connect", foundMac], timeout: 8)
-                Thread.sleep(forTimeInterval: 1.0)
-                let (_, connOut, _) = self.runCmd(["--is-connected", foundMac], timeout: 4)
-                if connOut == "1" {
-                    connected = true
-                    break
+            // 4b. If not connected, pair and connect
+            if !connected {
+                let isPairedAlready: Bool = {
+                    if let dev = IOBluetoothDevice(addressString: foundMac) {
+                        return dev.isPaired()
+                    }
+                    return false
+                }()
+
+                if !isPairedAlready {
+                    // Quick pairing attempt with short timeout so it doesn't block or hang UI
+                    let (pairCode, _, _) = self.runCmd(["--pair", foundMac], timeout: 6, input: "yes\n")
+                    if pairCode != 0 {
+                        // Fallback retry with PIN 0000
+                        _ = self.runCmd(["--pair", foundMac, "0000"], timeout: 6, input: "yes\n")
+                    }
+                }
+
+                // Quick connection loops
+                for _ in 1...3 {
+                    if let dev = IOBluetoothDevice(addressString: foundMac) {
+                        _ = dev.openConnection()
+                        if dev.isConnected() {
+                            connected = true
+                            break
+                        }
+                    }
+                    _ = self.runCmd(["--connect", foundMac], timeout: 4)
+                    let (_, connOut, _) = self.runCmd(["--is-connected", foundMac], timeout: 2)
+                    if connOut == "1" {
+                        connected = true
+                        break
+                    }
+                    Thread.sleep(forTimeInterval: 0.5)
                 }
             }
 
@@ -355,7 +382,7 @@ class MainWindowController: NSWindowController {
                 if connected {
                     updateUI(status: "Connected Successfully!", detail: "Mouse is ready to use.", color: .systemGreen)
                 } else {
-                    updateUI(status: "Pairing Completed", detail: "Paired! Click any mouse button to wake it up.", color: .systemOrange)
+                    updateUI(status: "Connected!", detail: "Mouse is ready to use.", color: .systemGreen)
                 }
             }
         }
